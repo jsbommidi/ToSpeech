@@ -35,7 +35,7 @@ class LoginRequest(BaseModel):
     email: EmailStr
 
 class UserSettingsBase(BaseModel):
-    sample_rate: int = 48000
+    sample_rate: int = 24000  # 24kHz is optimal for VibeVoice TTS model
     quality: str = "high"
     format: str = "uncompressed"
     auto_save: bool = True

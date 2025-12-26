@@ -262,10 +262,11 @@ export default function Settings() {
                                         <FormControl fullWidth size="small">
                                             <FormLabel sx={{ mb: 0.5, fontSize: '0.85rem' }}>Sample Rate</FormLabel>
                                             <Select
-                                                value={settings.sample_rate || 44100}
+                                                value={settings.sample_rate || 24000}
                                                 onChange={(e) => handleSave('sample_rate', Number(e.target.value))}
                                                 sx={{ borderRadius: 1.5 }}
                                             >
+                                                <MenuItem value={24000}>24 kHz (Recommended for VibeVoice)</MenuItem>
                                                 <MenuItem value={44100}>44.1 kHz</MenuItem>
                                                 <MenuItem value={48000}>48 kHz</MenuItem>
                                             </Select>

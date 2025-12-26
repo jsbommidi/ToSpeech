@@ -4,7 +4,7 @@ import Cookies from 'js-cookie';
 
 // Default settings per requirements
 const defaultSettings: Omit<UserSettings, 'id' | 'user_id'> = {
-  sample_rate: 48000,
+  sample_rate: 24000, // 24kHz is optimal for VibeVoice TTS model
   quality: 'high',
   format: 'uncompressed',
   auto_save: true,
