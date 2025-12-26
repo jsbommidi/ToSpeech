@@ -261,15 +261,18 @@ export default function Settings() {
                                     <Grid item xs={12} sm={6} lg={4}>
                                         <FormControl fullWidth size="small">
                                             <FormLabel sx={{ mb: 0.5, fontSize: '0.85rem' }}>Sample Rate</FormLabel>
-                                            <Select
-                                                value={settings.sample_rate || 24000}
-                                                onChange={(e) => handleSave('sample_rate', Number(e.target.value))}
-                                                sx={{ borderRadius: 1.5 }}
-                                            >
-                                                <MenuItem value={24000}>24 kHz (Recommended for VibeVoice)</MenuItem>
-                                                <MenuItem value={44100}>44.1 kHz</MenuItem>
-                                                <MenuItem value={48000}>48 kHz</MenuItem>
-                                            </Select>
+                                            <TextField
+                                                value="24 kHz"
+                                                size="small"
+                                                disabled
+                                                sx={{ 
+                                                    borderRadius: 1.5,
+                                                    '& .MuiInputBase-input.Mui-disabled': {
+                                                        WebkitTextFillColor: 'text.primary',
+                                                        color: 'text.primary'
+                                                    }
+                                                }}
+                                            />
                                         </FormControl>
                                     </Grid>
                                     <Grid item xs={12} sm={6} lg={4}>
