@@ -775,3 +775,110 @@ def get_history(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), 
         results.append(item_data)
         
     return results
+
+@app.get("/api/v1/audio/convert/{audio_id}")
+@app.get("/api/v1/audio/convert/{audio_id}")
+async def convert_audio(
+    audio_id: int,
+    format: str = "mp3",
+    bitrate: str = "192",
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Convert an audio file to different format/bitrate.
+    Supports: mp3 with bitrates 128, 192, 256, 320
+    """
+    import subprocess
+    import tempfile
+    
+    # Validate format and bitrate
+    if format not in ["mp3", "wav"]:
+        raise HTTPException(status_code=400, detail="Unsupported format. Use 'mp3' or 'wav'")
+    
+    if format == "mp3" and bitrate not in ["128", "192", "256", "320"]:
+        raise HTTPException(status_code=400, detail="Bitrate must be 128, 192, 256, or 320")
+    
+    # Get the audio history item
+    audio_item = db.query(models.AudioHistory).filter(
+        models.AudioHistory.id == audio_id,
+        models.AudioHistory.user_id == current_user.id
+    ).first()
+    
+    if not audio_item:
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    
+    # Extract filename from file_path (e.g., /static/filename.wav -> filename.wav)
+    original_filename = audio_item.file_path.split("/")[-1]
+    source_path = os.path.join(AUDIO_DIR, original_filename)
+    
+    if not os.path.exists(source_path):
+        raise HTTPException(status_code=404, detail="Source audio file not found on disk")
+    
+    # If requesting WAV and source is already WAV, just return it
+    if format == "wav":
+        return FileResponse(
+            source_path,
+            media_type="audio/wav",
+            filename=f"audio-{audio_id}.wav"
+        )
+    
+    # Convert to MP3
+    output_path = None
+    try:
+        # Create temporary output file
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_file:
+            output_path = tmp_file.name
+        
+        # Use ffmpeg from conda environment or system PATH
+        ffmpeg_cmd = os.environ.get('FFMPEG_PATH', 'ffmpeg')
+        
+        # Run ffmpeg conversion
+        cmd = [
+            ffmpeg_cmd,
+            "-i", source_path,
+            "-codec:a", "libmp3lame",
+            "-b:a", f"{bitrate}k",
+            "-y",  # Overwrite output file
+            output_path
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode != 0:
+            print(f"FFmpeg error: {result.stderr}")
+            if output_path and os.path.exists(output_path):
+                os.unlink(output_path)
+            raise HTTPException(status_code=500, detail="Audio conversion failed")
+        
+        # Verify the output file exists
+        if not os.path.exists(output_path):
+            raise HTTPException(status_code=500, detail="Conversion completed but output file not found")
+        
+        # Schedule cleanup after file is sent
+        background_tasks.add_task(os.unlink, output_path)
+        
+        # Return the converted file
+        return FileResponse(
+            output_path,
+            media_type="audio/mpeg",
+            filename=f"audio-{audio_id}-{bitrate}kbps.mp3"
+        )
+        
+    except subprocess.TimeoutExpired:
+        if output_path and os.path.exists(output_path):
+            os.unlink(output_path)
+        raise HTTPException(status_code=500, detail="Conversion timeout")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Conversion error: {e}")
+        if output_path and os.path.exists(output_path):
+            os.unlink(output_path)
+        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")

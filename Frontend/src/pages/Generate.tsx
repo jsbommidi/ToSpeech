@@ -4,7 +4,7 @@ import {
     FormControl, InputLabel, LinearProgress, Alert, Table, TableBody,
     TableCell, TableContainer, TableHead, TableRow, TablePagination,
     Checkbox, IconButton, Collapse, Toolbar, Tooltip, Chip, Stack,
-    InputAdornment, alpha, useTheme
+    InputAdornment, alpha, useTheme, Menu
 } from '@mui/material';
 import {
     Search as SearchIcon,
@@ -87,6 +87,9 @@ export default function Generate() {
     // Selection & Expansion
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [expandedId, setExpandedId] = useState<number | null>(null);
+
+    // Download Menu
+    const [downloadMenuAnchor, setDownloadMenuAnchor] = useState<null | HTMLElement>(null);
 
     const theme = useTheme();
 
@@ -380,18 +383,45 @@ export default function Generate() {
         setSelectedIds(newSelected);
     };
 
-    const handleBulkDownload = () => {
+    const handleBulkDownload = (format: 'wav' | 'mp3', bitrate?: string) => {
         const itemsToDownload = history.filter(item => selectedIds.has(item.id));
         itemsToDownload.forEach((item, index) => {
-            setTimeout(() => {
-                const link = document.createElement('a');
-                link.href = item.file_path;
-                link.download = `audio-${item.id}.wav`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+            setTimeout(async () => {
+                try {
+                    let downloadUrl: string;
+                    let filename: string;
+
+                    if (format === 'wav') {
+                        // Direct WAV download
+                        downloadUrl = item.file_path;
+                        filename = `audio-${item.id}.wav`;
+                    } else {
+                        // MP3 conversion via backend
+                        downloadUrl = `http://localhost:1311/api/v1/audio/convert/${item.id}?format=mp3&bitrate=${bitrate}`;
+                        filename = `audio-${item.id}-${bitrate}kbps.mp3`;
+                    }
+
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } catch (error) {
+                    console.error('Download failed:', error);
+                    alert(`Failed to download audio ${item.id}`);
+                }
             }, index * 500);
         });
+        handleDownloadMenuClose();
+    };
+
+    const handleDownloadMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+        setDownloadMenuAnchor(event.currentTarget);
+    };
+
+    const handleDownloadMenuClose = () => {
+        setDownloadMenuAnchor(null);
     };
 
     const handleBulkDelete = () => {
@@ -651,7 +681,7 @@ export default function Generate() {
                                     {selectedIds.size} selected
                                 </Typography>
                                 <Tooltip title="Download Selected">
-                                    <IconButton onClick={handleBulkDownload}>
+                                    <IconButton onClick={handleDownloadMenuOpen}>
                                         <DownloadIcon />
                                     </IconButton>
                                 </Tooltip>
@@ -900,6 +930,44 @@ export default function Generate() {
                     }}
                 />
             </Paper >
+
+            {/* Download Format Menu */}
+            <Menu
+                anchorEl={downloadMenuAnchor}
+                open={Boolean(downloadMenuAnchor)}
+                onClose={handleDownloadMenuClose}
+            >
+                <MenuItem onClick={() => handleBulkDownload('wav')}>
+                    <Box>
+                        <Typography variant="body2" fontWeight={600}>WAV (Original)</Typography>
+                        <Typography variant="caption" color="text.secondary">24 kHz, 16-bit PCM</Typography>
+                    </Box>
+                </MenuItem>
+                <MenuItem onClick={() => handleBulkDownload('mp3', '128')}>
+                    <Box>
+                        <Typography variant="body2" fontWeight={600}>MP3 - 128 kbps</Typography>
+                        <Typography variant="caption" color="text.secondary">Standard quality</Typography>
+                    </Box>
+                </MenuItem>
+                <MenuItem onClick={() => handleBulkDownload('mp3', '192')}>
+                    <Box>
+                        <Typography variant="body2" fontWeight={600}>MP3 - 192 kbps</Typography>
+                        <Typography variant="caption" color="text.secondary">High quality</Typography>
+                    </Box>
+                </MenuItem>
+                <MenuItem onClick={() => handleBulkDownload('mp3', '256')}>
+                    <Box>
+                        <Typography variant="body2" fontWeight={600}>MP3 - 256 kbps</Typography>
+                        <Typography variant="caption" color="text.secondary">Very high quality</Typography>
+                    </Box>
+                </MenuItem>
+                <MenuItem onClick={() => handleBulkDownload('mp3', '320')}>
+                    <Box>
+                        <Typography variant="body2" fontWeight={600}>MP3 - 320 kbps</Typography>
+                        <Typography variant="caption" color="text.secondary">Maximum quality</Typography>
+                    </Box>
+                </MenuItem>
+            </Menu>
         </Box >
     );
 }
