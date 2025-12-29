@@ -7,6 +7,9 @@ import {
     useTheme,
     CircularProgress,
     alpha,
+    Menu,
+    MenuItem,
+    Button,
 } from '@mui/material';
 import {
     PlayArrow,
@@ -29,6 +32,8 @@ export default function AudioPlayer({ transcriptId, audioUrl, autoPlay = false }
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [audioSrc, setAudioSrc] = useState<string | null>(null);
+    const [playbackRate, setPlaybackRate] = useState(1);
+    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -150,6 +155,13 @@ export default function AudioPlayer({ transcriptId, audioUrl, autoPlay = false }
         }
     }, [isLoading, autoPlay, audioSrc]);
 
+    // Update playback rate when it changes
+    useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.playbackRate = playbackRate;
+        }
+    }, [playbackRate]);
+
 
     const formatTime = (time: number) => {
         if (!Number.isFinite(time)) return '0:00';
@@ -259,6 +271,17 @@ export default function AudioPlayer({ transcriptId, audioUrl, autoPlay = false }
 
     }, [waveformPeaks, currentTime, duration, theme]);
 
+    const handleSpeedClick = (event: React.MouseEvent<HTMLElement>) => {
+        setAnchorEl(event.currentTarget);
+    };
+
+    const handleSpeedClose = (speed?: number) => {
+        setAnchorEl(null);
+        if (speed) {
+            setPlaybackRate(speed);
+        }
+    };
+
     return (
         <Paper
             elevation={0}
@@ -336,6 +359,37 @@ export default function AudioPlayer({ transcriptId, audioUrl, autoPlay = false }
             <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 65, textAlign: 'right', fontFamily: 'monospace', fontSize: '0.75rem' }}>
                 {formatTime(currentTime)} / {formatTime(duration)}
             </Typography>
+
+            {/* Playback Speed Control */}
+            <Button
+                size="small"
+                onClick={handleSpeedClick}
+                sx={{
+                    minWidth: 40,
+                    color: 'text.secondary',
+                    fontSize: '0.75rem',
+                    textTransform: 'none',
+                    fontWeight: 600,
+                }}
+            >
+                {playbackRate}x
+            </Button>
+            <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={() => handleSpeedClose()}
+            >
+                {[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => (
+                    <MenuItem
+                        key={rate}
+                        selected={rate === playbackRate}
+                        onClick={() => handleSpeedClose(rate)}
+                        dense
+                    >
+                        {rate}x
+                    </MenuItem>
+                ))}
+            </Menu>
 
         </Paper>
     );

@@ -625,11 +625,9 @@ export default function Generate() {
                 {
                     !generating && history.length > 0 && (
                         <Box sx={{ mt: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <audio
-                                controls
-                                src={history[0].file_path}
-                                style={{ flexGrow: 1, height: 40, borderRadius: 8, outline: 'none' }}
-                            />
+                            <Box sx={{ flexGrow: 1 }}>
+                                <AudioPlayer audioUrl={history[0].file_path} autoPlay={false} />
+                            </Box>
                             <Button
                                 variant="contained"
                                 color="success"
