@@ -118,4 +118,4 @@ This project utilizes code from **[VibeVoice](https://github.com/microsoft/VibeV
 
 The VibeVoice code is located in `Backend/VibeVoice1.5/` and retains its original MIT license. Please refer to `Backend/VibeVoice1.5/LICENSE` for full terms regarding that component.
 
-ToSpeech's original code is also licensed under the MIT License. See the main [LICENSE](LICENSE) file for details.
+ToSpeech's original code is licensed under the GNU General Public License v3.0 (GPLv3). See the main [LICENSE](LICENSE) file for details.
