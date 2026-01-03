@@ -16,6 +16,14 @@ export default defineConfig({
         target: 'http://localhost:1311',
         changeOrigin: true,
       },
+      '/auth': {
+        target: 'http://localhost:1311',
+        changeOrigin: true,
+      },
+      '/register': {
+        target: 'http://localhost:1311',
+        changeOrigin: true,
+      },
     },
   },
   build: {

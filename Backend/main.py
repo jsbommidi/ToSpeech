@@ -85,6 +85,7 @@ origins = [
     "http://localhost:1310",
     "http://127.0.0.1:1310",
     "http://localhost:5173",
+    "http://192.168.0.175:1310",
 ]
 
 app.add_middleware(

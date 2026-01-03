@@ -397,7 +397,7 @@ export default function Generate() {
                         filename = `audio-${item.id}.wav`;
                     } else {
                         // MP3 conversion via backend
-                        downloadUrl = `http://localhost:1311/api/v1/audio/convert/${item.id}?format=mp3&bitrate=${bitrate}`;
+                        downloadUrl = `/api/v1/audio/convert/${item.id}?format=mp3&bitrate=${bitrate}`;
                         filename = `audio-${item.id}-${bitrate}kbps.mp3`;
                     }
 
