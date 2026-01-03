@@ -208,7 +208,7 @@ export default function Settings() {
     return (
         <Container maxWidth="xl" sx={{ py: 3 }}>
             <Stack spacing={3}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
                     <Box>
                         <Typography variant="h5" fontWeight="800" letterSpacing="-0.02em" sx={{ mb: 0.5 }}>
                             Settings
@@ -217,7 +217,7 @@ export default function Settings() {
                             Manage your workspace preferences
                         </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1}>
+                    <Stack direction="row" spacing={1} sx={{ width: { xs: '100%', sm: 'auto' }, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
                         <Button
                             startIcon={<RestartAlt />}
                             color="inherit"
@@ -265,7 +265,7 @@ export default function Settings() {
                                                 value="24 kHz"
                                                 size="small"
                                                 disabled
-                                                sx={{ 
+                                                sx={{
                                                     borderRadius: 1.5,
                                                     '& .MuiInputBase-input.Mui-disabled': {
                                                         WebkitTextFillColor: 'text.primary',
@@ -375,7 +375,7 @@ export default function Settings() {
 
                                 <FormControl fullWidth size="small">
                                     <FormLabel sx={{ mb: 0.5, fontSize: '0.85rem' }}>Download New Model</FormLabel>
-                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
                                         <TextField
                                             value={downloadUrl}
                                             onChange={(e) => setDownloadUrl(e.target.value)}
@@ -389,7 +389,7 @@ export default function Settings() {
                                                         <CloudDownload fontSize="small" sx={{ opacity: 0.7 }} />
                                                     </InputAdornment>
                                                 ),
-                                                sx: { borderRadius: 1.5, borderTopRightRadius: 0, borderBottomRightRadius: 0 }
+                                                sx: { borderRadius: 1.5, borderTopRightRadius: { xs: 1.5, sm: 0 }, borderBottomRightRadius: { xs: 1.5, sm: 0 } }
                                             }}
                                         />
                                         <Button
@@ -398,8 +398,8 @@ export default function Settings() {
                                             disabled={!downloadUrl || isDownloading}
                                             sx={{
                                                 borderRadius: 1.5,
-                                                borderTopLeftRadius: 0,
-                                                borderBottomLeftRadius: 0,
+                                                borderTopLeftRadius: { xs: 1.5, sm: 0 },
+                                                borderBottomLeftRadius: { xs: 1.5, sm: 0 },
                                                 minWidth: '100px',
                                                 height: '40px' // Match TextField height approx
                                             }}
@@ -457,9 +457,9 @@ export default function Settings() {
 
                                 {/* Available Models List */}
                                 <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 2, gap: 1 }}>
                                         <Typography variant="subtitle2" fontWeight="700">Available Models</Typography>
-                                        <Stack direction="row" spacing={1}>
+                                        <Stack direction="row" spacing={1} sx={{ width: { xs: '100%', sm: 'auto' }, justifyContent: { xs: 'flex-end', sm: 'flex-end' } }}>
                                             {selectedModels.size > 0 && (
                                                 <Tooltip title="Delete Selected">
                                                     <IconButton

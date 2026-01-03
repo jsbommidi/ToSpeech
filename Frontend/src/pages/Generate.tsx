@@ -4,7 +4,7 @@ import {
     FormControl, InputLabel, LinearProgress, Alert, Table, TableBody,
     TableCell, TableContainer, TableHead, TableRow, TablePagination,
     Checkbox, IconButton, Collapse, Toolbar, Tooltip, Chip, Stack,
-    InputAdornment, alpha, useTheme, Menu
+    InputAdornment, alpha, useTheme, Menu, useMediaQuery, Card, CardContent, CardActions
 } from '@mui/material';
 import {
     Search as SearchIcon,
@@ -92,6 +92,7 @@ export default function Generate() {
     const [downloadMenuAnchor, setDownloadMenuAnchor] = useState<null | HTMLElement>(null);
 
     const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
     // --- Refs ---
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -433,7 +434,7 @@ export default function Generate() {
     const isPageIndeterminate = paginatedHistory.some(item => selectedIds.has(item.id)) && !isPageSelected;
 
     return (
-        <Box sx={{ p: 4, maxWidth: '100%', overflowX: 'hidden' }}>
+        <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: '100%', overflowX: 'hidden' }}>
             {/* --- Generation Section --- */}
             <Paper
                 elevation={0}
@@ -445,125 +446,139 @@ export default function Generate() {
             >
                 {/* Row 1: Header + Model + Voice */}
                 {/* Row 1: Header + Model + Voice */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 3, mb: 3 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
-                        Generate Speech
-                    </Typography>
+                <Box sx={{ mb: 3 }}>
+                    <Stack spacing={3}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
+                                Generate Speech
+                            </Typography>
+                        </Box>
 
-                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', flex: 1, justifyContent: 'flex-end', minWidth: 280, alignItems: 'center' }}>
-                        <FormControl size="small" sx={{ minWidth: 140, maxWidth: 200 }}>
-                            <InputLabel>Model</InputLabel>
-                            <Select
-                                value={selectedModel}
-                                label="Model"
-                                onChange={(e) => setSelectedModel(e.target.value)}
-                            >
-                                {availableModels.map((m) => (
-                                    <MenuItem
-                                        key={m}
-                                        value={m}
+                        <Stack spacing={2}>
+                            {/* Row 1: Model & Voice Selectors */}
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                                <FormControl size="small" fullWidth>
+                                    <InputLabel>Model</InputLabel>
+                                    <Select
+                                        value={selectedModel}
+                                        label="Model"
+                                        onChange={(e) => setSelectedModel(e.target.value)}
                                     >
-                                        {m}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
+                                        {availableModels.map((m) => (
+                                            <MenuItem key={m} value={m}>{m}</MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
 
-                        <FormControl size="small" sx={{ minWidth: 140, maxWidth: 200 }}>
-                            <InputLabel>Voice</InputLabel>
-                            <Select
-                                value={selectedSpeaker}
-                                label="Voice"
-                                onChange={(e) => setSelectedSpeaker(e.target.value)}
-                                disabled={!selectedModel || availableSpeakers.length === 0}
+                                <FormControl size="small" fullWidth>
+                                    <InputLabel>Voice</InputLabel>
+                                    <Select
+                                        value={selectedSpeaker}
+                                        label="Voice"
+                                        onChange={(e) => setSelectedSpeaker(e.target.value)}
+                                        disabled={!selectedModel || availableSpeakers.length === 0}
+                                    >
+                                        {availableSpeakers.length === 0 ? (
+                                            <MenuItem value="" disabled>No voices available</MenuItem>
+                                        ) : (
+                                            availableSpeakers.map((s) => (
+                                                <MenuItem key={s} value={s}>{formatVoiceName(s)}</MenuItem>
+                                            ))
+                                        )}
+                                    </Select>
+                                </FormControl>
+                            </Stack>
+
+                            {/* Row 2: Config & Actions */}
+                            <Stack
+                                direction={{ xs: 'column', md: 'row' }}
+                                spacing={2}
+                                justifyContent="space-between"
+                                alignItems={{ xs: 'stretch', md: 'center' }}
                             >
-                                {availableSpeakers.length === 0 ? (
-                                    <MenuItem value="" disabled>
-                                        No voices available
-                                    </MenuItem>
-                                ) : (
-                                    availableSpeakers.map((s) => (
-                                        <MenuItem key={s} value={s}>
-                                            {formatVoiceName(s)}
-                                        </MenuItem>
-                                    ))
-                                )}
-                            </Select>
-                        </FormControl>
+                                {/* Configuration Parameters */}
+                                <Stack direction="row" spacing={2} alignItems="center">
+                                    <TextField
+                                        label="CFG"
+                                        type="number"
+                                        value={isNaN(cfgScale) ? '' : cfgScale}
+                                        onChange={(e) => setCfgScale(parseFloat(e.target.value))}
+                                        inputProps={{ step: 0.1, min: 1.0, max: 10.0 }}
+                                        size="small"
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ width: { xs: '100%', sm: 100 } }}
+                                    />
 
-                        <TextField
-                            label="CFG"
-                            type="number"
-                            value={isNaN(cfgScale) ? '' : cfgScale}
-                            onChange={(e) => setCfgScale(parseFloat(e.target.value))}
-                            inputProps={{ step: 0.1, min: 1.0, max: 10.0 }}
-                            size="small"
-                            InputLabelProps={{ shrink: true }}
-                            sx={{ width: 80 }}
-                        />
+                                    <TextField
+                                        label="Steps"
+                                        type="number"
+                                        value={isNaN(inferenceSteps) ? '' : inferenceSteps}
+                                        onChange={(e) => setInferenceSteps(parseInt(e.target.value))}
+                                        inputProps={{ step: 1, min: 1, max: 100 }}
+                                        size="small"
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ width: { xs: '100%', sm: 100 } }}
+                                    />
 
-                        <TextField
-                            label="Steps"
-                            type="number"
-                            value={isNaN(inferenceSteps) ? '' : inferenceSteps}
-                            onChange={(e) => setInferenceSteps(parseInt(e.target.value))}
-                            inputProps={{ step: 1, min: 1, max: 100 }}
-                            size="small"
-                            InputLabelProps={{ shrink: true }}
-                            sx={{ width: 80 }}
-                        />
+                                    <Tooltip title="Reset all settings">
+                                        <IconButton
+                                            onClick={handleResetSettings}
+                                            sx={{
+                                                bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                                '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) }
+                                            }}
+                                        >
+                                            <ResetIcon />
+                                        </IconButton>
+                                    </Tooltip>
+                                </Stack>
 
-                        <Tooltip title="Reset all settings">
-                            <IconButton
-                                onClick={handleResetSettings}
-                                sx={{
-                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) }
-                                }}
-                            >
-                                <ResetIcon />
-                            </IconButton>
-                        </Tooltip>
+                                {/* Action Buttons */}
+                                <Stack direction="row" spacing={1} sx={{ width: { xs: '100%', md: 'auto' } }}>
+                                    <Button
+                                        variant="contained"
+                                        onClick={handleGenerate}
+                                        disabled={generating || !text.trim() || !selectedModel || !selectedSpeaker}
+                                        fullWidth={isMobile}
+                                        sx={{
+                                            fontWeight: 700,
+                                            textTransform: 'none',
+                                            boxShadow: 'none',
+                                            height: 40,
+                                            minWidth: 120,
+                                            flexGrow: { xs: 1, md: 0 },
+                                            '&:hover': {
+                                                boxShadow: theme.shadows[4]
+                                            }
+                                        }}
+                                    >
+                                        {generating ? 'Generating...' : 'Generate'}
+                                    </Button>
 
-                        <Button
-                            variant="contained"
-                            onClick={handleGenerate}
-                            disabled={generating || !text.trim() || !selectedModel || !selectedSpeaker}
-                            sx={{
-                                fontWeight: 700,
-                                textTransform: 'none',
-                                boxShadow: 'none',
-                                height: 40,
-                                minWidth: 100,
-                                '&:hover': {
-                                    boxShadow: theme.shadows[4]
-                                }
-                            }}
-                        >
-                            {generating ? '...' : 'Generate'}
-                        </Button>
-
-                        <Button
-                            variant="outlined"
-                            color="error"
-                            onClick={handleStop}
-                            disabled={!generating && !expandedId}
-                            sx={{
-                                fontWeight: 700,
-                                textTransform: 'none',
-                                height: 40,
-                                minWidth: 40,
-                                borderColor: alpha(theme.palette.error.main, 0.5),
-                                color: theme.palette.error.main,
-                                '&:hover': {
-                                    borderColor: theme.palette.error.main,
-                                    bgcolor: alpha(theme.palette.error.main, 0.05)
-                                }
-                            }}
-                        >
-                            <StopIcon />
-                        </Button>
-                    </Box>
+                                    <Button
+                                        variant="outlined"
+                                        color="error"
+                                        onClick={handleStop}
+                                        disabled={!generating && !expandedId}
+                                        sx={{
+                                            fontWeight: 700,
+                                            textTransform: 'none',
+                                            height: 40,
+                                            minWidth: 40,
+                                            borderColor: alpha(theme.palette.error.main, 0.5),
+                                            color: theme.palette.error.main,
+                                            '&:hover': {
+                                                borderColor: theme.palette.error.main,
+                                                bgcolor: alpha(theme.palette.error.main, 0.05)
+                                            }
+                                        }}
+                                    >
+                                        <StopIcon />
+                                    </Button>
+                                </Stack>
+                            </Stack>
+                        </Stack>
+                    </Stack>
                 </Box>
 
                 {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
@@ -690,10 +705,12 @@ export default function Generate() {
                                 </Tooltip>
                             </>
                         ) : (
-                            <Box sx={{ display: 'flex', width: '100%', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                                <Typography variant="h6" sx={{ fontWeight: 600, mr: 2 }}>
-                                    History
-                                </Typography>
+                            <Box sx={{ display: 'flex', width: '100%', gap: 2, flexWrap: 'wrap', flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'stretch', md: 'center' } }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                    <Typography variant="h6" sx={{ fontWeight: 600, mr: 2 }}>
+                                        History
+                                    </Typography>
+                                </Box>
 
                                 <TextField
                                     size="small"
@@ -703,217 +720,318 @@ export default function Generate() {
                                     InputProps={{
                                         startAdornment: <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment>
                                     }}
-                                    sx={{ flexGrow: 1, minWidth: 200 }}
+                                    sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 200 } }}
                                 />
 
-                                <FormControl size="small" sx={{ minWidth: 150 }}>
-                                    <InputLabel>Model</InputLabel>
-                                    <Select
-                                        value={filterModel}
-                                        label="Model"
-                                        onChange={(e) => setFilterModel(e.target.value)}
-                                    >
-                                        <MenuItem value="all">All Models</MenuItem>
-                                        {uniqueModels.map(m => (
-                                            <MenuItem key={m} value={m}>{m}</MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
+                                <Box sx={{ display: 'flex', gap: 2, width: { xs: '100%', md: 'auto' } }}>
+                                    <FormControl size="small" sx={{ minWidth: 120, flex: 1 }}>
+                                        <InputLabel>Model</InputLabel>
+                                        <Select
+                                            value={filterModel}
+                                            label="Model"
+                                            onChange={(e) => setFilterModel(e.target.value)}
+                                        >
+                                            <MenuItem value="all">All Models</MenuItem>
+                                            {uniqueModels.map(m => (
+                                                <MenuItem key={m} value={m}>{m}</MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
 
-                                <FormControl size="small" sx={{ minWidth: 150 }}>
-                                    <InputLabel>Sort By</InputLabel>
-                                    <Select
-                                        value={sortBy}
-                                        label="Sort By"
-                                        onChange={(e) => setSortBy(e.target.value as SortOption)}
-                                        startAdornment={<InputAdornment position="start"><SortIcon fontSize="small" /></InputAdornment>}
-                                    >
-                                        <MenuItem value="date-desc">Newest First</MenuItem>
-                                        <MenuItem value="date-asc">Oldest First</MenuItem>
-                                        <MenuItem value="name-asc">Text (A-Z)</MenuItem>
-                                        <MenuItem value="name-desc">Text (Z-A)</MenuItem>
-                                    </Select>
-                                </FormControl>
+                                    <FormControl size="small" sx={{ minWidth: 120, flex: 1 }}>
+                                        <InputLabel>Sort By</InputLabel>
+                                        <Select
+                                            value={sortBy}
+                                            label="Sort By"
+                                            onChange={(e) => setSortBy(e.target.value as SortOption)}
+                                            startAdornment={<InputAdornment position="start"><SortIcon fontSize="small" /></InputAdornment>}
+                                        >
+                                            <MenuItem value="date-desc">Newest First</MenuItem>
+                                            <MenuItem value="date-asc">Oldest First</MenuItem>
+                                            <MenuItem value="name-asc">Text (A-Z)</MenuItem>
+                                            <MenuItem value="name-desc">Text (Z-A)</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                </Box>
                             </Box>
                         )
                     }
                 </Toolbar >
 
-                {/* Table */}
-                < TableContainer >
-                    <Table sx={{ '& td, & th': { borderBottom: 'none' } }}>
-                        <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
-                            <TableRow>
-                                <TableCell padding="checkbox">
-                                    <Checkbox
-                                        indeterminate={isPageIndeterminate}
-                                        checked={isPageSelected}
-                                        onChange={handleSelectPage}
-                                    />
-                                </TableCell>
-                                <TableCell>ID</TableCell>
-                                <TableCell sx={{ width: '40%' }}>Text Input</TableCell>
-                                <TableCell>Model & Voice</TableCell>
-                                <TableCell>Date</TableCell>
-                                <TableCell align="center">Actions</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {paginatedHistory.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
-                                        <Typography color="text.secondary">
-                                            {loadingHistory ? "Loading history..." : "No generation history found."}
-                                        </Typography>
-                                    </TableCell>
-                                </TableRow>
-                            ) : paginatedHistory.map((row) => {
+                {/* History List (Mobile vs Desktop) */}
+                {isMobile ? (
+                    <Stack spacing={2} sx={{ mt: 2 }}>
+                        {paginatedHistory.length === 0 ? (
+                            <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
+                                {loadingHistory ? "Loading history..." : "No generation history found."}
+                            </Typography>
+                        ) : (
+                            paginatedHistory.map((row) => {
                                 const isItemSelected = selectedIds.has(row.id);
                                 const isExpanded = expandedId === row.id;
 
                                 return (
-                                    <Fragment key={row.id}>
-                                        <TableRow
-                                            hover
-                                            selected={isItemSelected}
-                                            sx={{ '& td, & th': { borderBottom: 'none' } }}
-                                        >
-                                            <TableCell padding="checkbox">
+                                    <Card
+                                        key={row.id}
+                                        variant="outlined"
+                                        sx={{
+                                            borderColor: isItemSelected ? 'primary.main' : 'divider',
+                                            bgcolor: isItemSelected ? alpha(theme.palette.primary.main, 0.04) : 'background.paper'
+                                        }}
+                                    >
+                                        <CardContent sx={{ pb: 1, '&:last-child': { pb: 1 } }}>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'flex-start' }}>
+                                                <Box>
+                                                    <Typography variant="caption" color="text.secondary" display="block">
+                                                        #{row.id} • {format(new Date(row.timestamp), 'MMM d, h:mm a')}
+                                                    </Typography>
+                                                </Box>
                                                 <Checkbox
+                                                    size="small"
                                                     checked={isItemSelected}
                                                     onChange={() => handleSelectOne(row.id)}
+                                                    sx={{ p: 0, ml: 1 }}
                                                 />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Typography variant="body2" color="text.secondary">
-                                                    {row.id}
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Tooltip title={row.text_input}>
-                                                    <Typography noWrap sx={{ maxWidth: 300, fontWeight: 500, cursor: 'default' }}>
+                                            </Box>
+                                            <Typography variant="body1" noWrap sx={{ fontWeight: 500, mb: 1.5 }}>
+                                                {row.text_input}
+                                            </Typography>
+                                            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ gap: 1 }}>
+                                                <Chip label={row.model_name} size="small" variant="outlined" />
+                                                {row.speaker && (
+                                                    <Chip label={formatVoiceName(row.speaker)} size="small" variant="outlined" />
+                                                )}
+                                            </Stack>
+                                        </CardContent>
+                                        <CardActions disableSpacing sx={{ justifyContent: 'space-between', borderTop: '1px solid', borderColor: 'divider', bgcolor: alpha(theme.palette.background.default, 0.5), px: 2, py: 1 }}>
+                                            <IconButton
+                                                onClick={() => setExpandedId(isExpanded ? null : row.id)}
+                                                size="small"
+                                                color={isExpanded ? 'primary' : 'default'}
+                                            >
+                                                {isExpanded ? <KeyboardArrowUpIcon /> : <PlayIcon />}
+                                            </IconButton>
+                                            <Button
+                                                size="small"
+                                                onClick={() => setExpandedId(isExpanded ? null : row.id)}
+                                                sx={{ textTransform: 'none' }}
+                                            >
+                                                {isExpanded ? "Hide Details" : "Show Details"}
+                                            </Button>
+                                        </CardActions>
+                                        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                                            <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider', bgcolor: alpha(theme.palette.action.hover, 0.05) }}>
+                                                <Box sx={{ mb: 2 }}>
+                                                    <AudioPlayer audioUrl={row.file_path} autoPlay={false} />
+                                                </Box>
+
+                                                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2, fontSize: '0.8rem', color: 'text.secondary' }}>
+                                                    <Box>Duration: {row.duration || '?'}s</Box>
+                                                    <Box>Words: {row.text_input.split(/\s+/).filter(w => w.length > 0).length}</Box>
+                                                </Box>
+
+                                                <Typography variant="subtitle2" sx={{ mb: 0.5, fontSize: '0.85rem' }}>Full Transcript</Typography>
+                                                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.paper' }}>
+                                                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem' }}>
                                                         {row.text_input}
                                                     </Typography>
-                                                </Tooltip>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Stack spacing={0.5}>
-                                                    <Chip label={row.model_name} size="small" sx={{ width: 'fit-content' }} />
-                                                    {row.speaker && (
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {formatVoiceName(row.speaker)} • {row.duration ? `${row.duration}s` : ''}
-                                                        </Typography>
-                                                    )}
-                                                    {!row.speaker && row.duration && (
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {row.duration}s
-                                                        </Typography>
-                                                    )}
-                                                </Stack>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Typography variant="body2">
-                                                    {format(new Date(row.timestamp), 'MMM d, yyyy')}
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {format(new Date(row.timestamp), 'h:mm a')}
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell align="center">
-                                                <IconButton
+                                                </Paper>
+
+                                                <Button
+                                                    variant="outlined"
                                                     size="small"
-                                                    onClick={() => setExpandedId(isExpanded ? null : row.id)}
-                                                    color={isExpanded ? 'primary' : 'default'}
+                                                    color="success"
+                                                    startIcon={<DownloadIcon />}
+                                                    href={row.file_path}
+                                                    download={`audio-${row.id}.wav`}
+                                                    fullWidth
+                                                    sx={{ mt: 2 }}
                                                 >
-                                                    {isExpanded ? <KeyboardArrowUpIcon /> : <PlayIcon />}
-                                                </IconButton>
-                                            </TableCell>
-                                        </TableRow>
-                                        <TableRow key={`${row.id}-details`}>
-                                            <TableCell style={{ paddingBottom: 0, paddingTop: 0, borderBottom: 'none' }} colSpan={6}>
-                                                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                                                    <Box sx={{
-                                                        p: 3,
-                                                        bgcolor: alpha(theme.palette.primary.main, 0.04), // Subtle tint matching theme
-                                                        borderRadius: 2,
-                                                        my: 2,
-                                                        mx: 1,
-                                                        border: '1px solid',
-                                                        borderColor: 'divider'
-                                                    }}>
-
-                                                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                                                <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary' }}>
-                                                                    recording_{row.id}.wav
-                                                                </Typography>
-                                                                <Chip
-                                                                    label="completed"
-                                                                    size="small"
-                                                                    color="success"
-                                                                    icon={<CheckCircleIcon />}
-                                                                    sx={{ fontWeight: 700 }}
-                                                                />
-                                                            </Box>
-                                                            <IconButton onClick={() => setExpandedId(null)} size="small" sx={{ color: 'text.secondary' }}>
-                                                                <CloseIcon />
-                                                            </IconButton>
-                                                        </Box>
-
-                                                        {/* Metadata Row */}
-                                                        <Box sx={{ display: 'flex', gap: 3, mb: 3, color: 'text.secondary', fontSize: '0.875rem' }}>
-                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                                <CalendarIcon sx={{ fontSize: '1rem' }} />
-                                                                {format(new Date(row.timestamp), 'MMM d, yyyy')}
-                                                            </Box>
-                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                                <TimeIcon sx={{ fontSize: '1rem' }} />
-                                                                {format(new Date(row.timestamp), 'h:mm a')}
-                                                            </Box>
-                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                                <Typography component="span" sx={{ fontSize: 'inherit', fontWeight: 500 }}>Words:</Typography>
-                                                                {row.text_input.split(/\s+/).filter(w => w.length > 0).length}
-                                                            </Box>
-                                                        </Box>
-
-                                                        {/* Audio Player */}
-                                                        <Box sx={{ mb: 4 }}>
-                                                            <AudioPlayer audioUrl={row.file_path} autoPlay={false} />
-                                                        </Box>
-
-                                                        {/* Transcript Content */}
-                                                        <Box>
-                                                            <Typography variant="subtitle2" sx={{ color: 'text.secondary', mb: 1, fontWeight: 600 }}>
-                                                                Transcript Content
-                                                            </Typography>
-                                                            <Paper
-                                                                elevation={0}
-                                                                sx={{
-                                                                    p: 3,
-                                                                    bgcolor: theme.palette.mode === 'dark' ? alpha('#000000', 0.4) : alpha(theme.palette.common.black, 0.03),
-                                                                    border: '1px solid',
-                                                                    borderColor: 'divider',
-                                                                    borderRadius: 2,
-                                                                    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                                                                    color: 'text.secondary',
-                                                                    fontSize: '0.9rem',
-                                                                    lineHeight: 1.6
-                                                                }}
-                                                            >
-                                                                {row.text_input}
-                                                            </Paper>
-                                                        </Box>
-
-                                                    </Box>
-                                                </Collapse>
-                                            </TableCell>
-                                        </TableRow>
-                                    </Fragment>
+                                                    Download WAV
+                                                </Button>
+                                            </Box>
+                                        </Collapse>
+                                    </Card>
                                 );
-                            })}
-                        </TableBody >
-                    </Table >
-                </TableContainer >
+                            })
+                        )}
+                    </Stack>
+                ) : (
+                    <TableContainer>
+                        <Table sx={{ '& td, & th': { borderBottom: 'none' } }}>
+                            <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
+                                <TableRow>
+                                    <TableCell padding="checkbox">
+                                        <Checkbox
+                                            indeterminate={isPageIndeterminate}
+                                            checked={isPageSelected}
+                                            onChange={handleSelectPage}
+                                        />
+                                    </TableCell>
+                                    <TableCell>ID</TableCell>
+                                    <TableCell sx={{ width: '40%' }}>Text Input</TableCell>
+                                    <TableCell>Model & Voice</TableCell>
+                                    <TableCell>Date</TableCell>
+                                    <TableCell align="center">Actions</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {paginatedHistory.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
+                                            <Typography color="text.secondary">
+                                                {loadingHistory ? "Loading history..." : "No generation history found."}
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : paginatedHistory.map((row) => {
+                                    const isItemSelected = selectedIds.has(row.id);
+                                    const isExpanded = expandedId === row.id;
+
+                                    return (
+                                        <Fragment key={row.id}>
+                                            <TableRow
+                                                hover
+                                                selected={isItemSelected}
+                                                sx={{ '& td, & th': { borderBottom: 'none' } }}
+                                            >
+                                                <TableCell padding="checkbox">
+                                                    <Checkbox
+                                                        checked={isItemSelected}
+                                                        onChange={() => handleSelectOne(row.id)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        {row.id}
+                                                    </Typography>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Tooltip title={row.text_input}>
+                                                        <Typography noWrap sx={{ maxWidth: 300, fontWeight: 500, cursor: 'default' }}>
+                                                            {row.text_input}
+                                                        </Typography>
+                                                    </Tooltip>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Stack spacing={0.5}>
+                                                        <Chip label={row.model_name} size="small" sx={{ width: 'fit-content' }} />
+                                                        {row.speaker && (
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {formatVoiceName(row.speaker)} • {row.duration ? `${row.duration}s` : ''}
+                                                            </Typography>
+                                                        )}
+                                                        {!row.speaker && row.duration && (
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {row.duration}s
+                                                            </Typography>
+                                                        )}
+                                                    </Stack>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography variant="body2">
+                                                        {format(new Date(row.timestamp), 'MMM d, yyyy')}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {format(new Date(row.timestamp), 'h:mm a')}
+                                                    </Typography>
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => setExpandedId(isExpanded ? null : row.id)}
+                                                        color={isExpanded ? 'primary' : 'default'}
+                                                    >
+                                                        {isExpanded ? <KeyboardArrowUpIcon /> : <PlayIcon />}
+                                                    </IconButton>
+                                                </TableCell>
+                                            </TableRow>
+                                            <TableRow key={`${row.id}-details`}>
+                                                <TableCell style={{ paddingBottom: 0, paddingTop: 0, borderBottom: 'none' }} colSpan={6}>
+                                                    <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                                                        <Box sx={{
+                                                            p: 3,
+                                                            bgcolor: alpha(theme.palette.primary.main, 0.04), // Subtle tint matching theme
+                                                            borderRadius: 2,
+                                                            my: 2,
+                                                            mx: 1,
+                                                            border: '1px solid',
+                                                            borderColor: 'divider'
+                                                        }}>
+
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                                    <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                                                                        recording_{row.id}.wav
+                                                                    </Typography>
+                                                                    <Chip
+                                                                        label="completed"
+                                                                        size="small"
+                                                                        color="success"
+                                                                        icon={<CheckCircleIcon />}
+                                                                        sx={{ fontWeight: 700 }}
+                                                                    />
+                                                                </Box>
+                                                                <IconButton onClick={() => setExpandedId(null)} size="small" sx={{ color: 'text.secondary' }}>
+                                                                    <CloseIcon />
+                                                                </IconButton>
+                                                            </Box>
+
+                                                            {/* Metadata Row */}
+                                                            <Box sx={{ display: 'flex', gap: 3, mb: 3, color: 'text.secondary', fontSize: '0.875rem' }}>
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                    <CalendarIcon sx={{ fontSize: '1rem' }} />
+                                                                    {format(new Date(row.timestamp), 'MMM d, yyyy')}
+                                                                </Box>
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                    <TimeIcon sx={{ fontSize: '1rem' }} />
+                                                                    {format(new Date(row.timestamp), 'h:mm a')}
+                                                                </Box>
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                    <Typography component="span" sx={{ fontSize: 'inherit', fontWeight: 500 }}>Words:</Typography>
+                                                                    {row.text_input.split(/\s+/).filter(w => w.length > 0).length}
+                                                                </Box>
+                                                            </Box>
+
+                                                            {/* Audio Player */}
+                                                            <Box sx={{ mb: 4 }}>
+                                                                <AudioPlayer audioUrl={row.file_path} autoPlay={false} />
+                                                            </Box>
+
+                                                            {/* Transcript Content */}
+                                                            <Box>
+                                                                <Typography variant="subtitle2" sx={{ color: 'text.secondary', mb: 1, fontWeight: 600 }}>
+                                                                    Transcript Content
+                                                                </Typography>
+                                                                <Paper
+                                                                    elevation={0}
+                                                                    sx={{
+                                                                        p: 3,
+                                                                        bgcolor: theme.palette.mode === 'dark' ? alpha('#000000', 0.4) : alpha(theme.palette.common.black, 0.03),
+                                                                        border: '1px solid',
+                                                                        borderColor: 'divider',
+                                                                        borderRadius: 2,
+                                                                        fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                                                                        color: 'text.secondary',
+                                                                        fontSize: '0.9rem',
+                                                                        lineHeight: 1.6
+                                                                    }}
+                                                                >
+                                                                    {row.text_input}
+                                                                </Paper>
+                                                            </Box>
+
+                                                        </Box>
+                                                    </Collapse>
+                                                </TableCell>
+                                            </TableRow>
+                                        </Fragment>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                )}
 
                 <TablePagination
                     rowsPerPageOptions={[5, 10, 25, 50]}

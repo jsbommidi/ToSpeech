@@ -20,7 +20,7 @@ export default function Layout({ children }: LayoutProps) {
                     maxWidth: 1440,
                     margin: '0 auto',
                     overflowX: 'hidden',
-                    pt: { xs: 8, md: 3 }, // Add padding top on mobile for the menu button
+                    pt: { xs: 9, md: 3 }, // Increased padding top on mobile to avoid overlap with menu button
                 }}
             >
                 {children}
