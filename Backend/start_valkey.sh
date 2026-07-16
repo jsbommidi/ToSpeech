@@ -15,7 +15,13 @@ if lsof -Pi :1312 -sTCP:LISTEN -t >/dev/null ; then
 fi
 
 # Start Valkey on custom port
-valkey-server --port 1312 --daemonize no
+if [ -n "$VALKEY_PASSWORD" ]; then
+    echo "Starting Valkey with authentication..."
+    valkey-server --port 1312 --requirepass "$VALKEY_PASSWORD" --daemonize no
+else
+    echo "⚠️  WARNING: No VALKEY_PASSWORD set. Valkey running without authentication."
+    valkey-server --port 1312 --daemonize no
+fi
 
 # Note: Use --daemonize yes to run in background
 # Or use: brew services start valkey (but this uses default port 6379)

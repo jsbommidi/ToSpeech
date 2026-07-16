@@ -70,6 +70,55 @@ Build ledger. Append-only. One entry per completed item.
 - commit: pending
 - notes: Rate limiting now works behind nginx/reverse-proxy.
 
+## sec-13-valkey-auth
+- done: Valkey broker/backend URLs now include password from `VALKEY_PASSWORD` env var. `start_valkey.sh` passes `--requirepass` when set.
+- files: `Backend/celery_app.py`, `Backend/start_valkey.sh`
+- snippet: `f"redis://:{password}@localhost:1312/0"`; `valkey-server --requirepass "$VALKEY_PASSWORD"`
+- commit: pending
+- notes: Warns if VALKEY_PASSWORD unset. CELERY_BROKER_URL / CELERY_RESULT_BACKEND env vars still override.
+
+## sec-14-vite-localhost
+- done: Vite dev server binds to `localhost` only (not `0.0.0.0`).
+- files: `Frontend/vite.config.ts`
+- snippet: `host: 'localhost'`
+- commit: pending
+- notes: LAN exposure eliminated. No more network access to the app + proxy.
+
+## sec-15-rate-limit-more
+- done: Added rate limits to remaining mutating endpoints: settings 20/min, convert 10/min, delete model 10/min, cancel 20/min, history 30/min. Fixed duplicate `@app.get` decorator on convert endpoint.
+- files: `Backend/main.py`
+- snippet: `@limiter.limit("10/minute")` on convert, `20/minute` on settings/cancel, `30/minute` on history
+- commit: pending
+- notes: All state-changing endpoints now have rate limits.
+
+## sec-16-thread-safe-download
+- done: Added `threading.Lock` around all `download_progress` reads and writes.
+- files: `Backend/main.py`
+- snippet: `with _download_lock:` wraps every dict access
+- commit: pending
+- notes: Eliminates TOCTOU race on duplicate-download check and status reads.
+
+## sec-17-fernet-failfast
+- done: FERNET_KEY missing at startup now raises RuntimeError immediately (matching JWT_SECRET_KEY pattern). No late crash.
+- files: `Backend/main.py`
+- snippet: `raise RuntimeError("FERNET_KEY environment variable is required")`
+- commit: pending
+- notes: `_fernet` is now always a valid Fernet instance. Dead `if not _fernet:` guards in encrypt/decrypt are harmless.
+
+## sec-18-dead-code
+- done: Removed unused imports (`wave`, `random`, `StaticFiles`), dead `_FFMPEG_PATH` variable, duplicate `@app.get` decorator, commented mount line. Kept `AutoConfig`, `AutoModelForCausalLM` (used for VibeVoice).
+- files: `Backend/main.py`
+- snippet: Cleaned imports, no dead code
+- commit: pending
+- notes: `pipeline` import not removed (still used in load_model_pipeline fallback path).
+
+## sec-19-utcnow
+- done: Replaced all `datetime.utcnow()` with `datetime.now(UTC)` across main.py, models.py, tasks.py.
+- files: `Backend/main.py`, `Backend/models.py`, `Backend/tasks.py`
+- snippet: `from datetime import datetime, UTC`; `datetime.now(UTC)`
+- commit: pending
+- notes: Zero utcnow() calls remaining. models.py uses lambda for SQLAlchemy default.
+
 ## sec-11-error-sanitization
 - done: Added global exception handler. Logs full traceback server-side, returns generic `{"detail": "Internal server error"}` to client.
 - files: `Backend/main.py`

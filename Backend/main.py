@@ -1,12 +1,11 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Header, BackgroundTasks, Request, Path
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import models
 import schemas
 import database
@@ -15,15 +14,15 @@ import uuid
 import hmac
 import hashlib
 import secrets
-import wave
-import random
+import subprocess
 import torch
 import scipy.io.wavfile
+import threading
 import numpy as np
 import sys
 import copy
 import traceback
-from transformers import pipeline, AutoConfig, AutoModelForCausalLM
+from transformers import AutoConfig, AutoModelForCausalLM
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -88,7 +87,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 1440 # 24 hours
 # HF Token encryption
 from cryptography.fernet import Fernet
 FERNET_KEY = os.environ.get("FERNET_KEY")
-_fernet = Fernet(FERNET_KEY.encode()) if FERNET_KEY else None
+if not FERNET_KEY:
+    raise RuntimeError("FERNET_KEY environment variable is required")
+_fernet = Fernet(FERNET_KEY.encode())
 
 def encrypt_hf_token(plain: str | None) -> str | None:
     if not plain:
@@ -181,9 +182,9 @@ def get_db():
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.now(UTC) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -237,17 +238,14 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 AUDIO_DIR = "generated_audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-# Resolve ffmpeg path once at startup
-import subprocess
-_FFMPEG_PATH = "/usr/bin/env"  # will look up ffmpeg from PATH each call
-# Validate ffmpeg is available
+# Validate ffmpeg is available at startup
 try:
     subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True, timeout=5)
 except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
     print("WARNING: ffmpeg not found. Audio conversion will be unavailable.", flush=True)
 
 # Mount static files to serve audio
-# app.mount("/static", StaticFiles(directory=AUDIO_DIR), name="static")
+
 
 def create_access_signature(filename: str, expires_timestamp: int) -> str:
     """Create a localized signature for a file access"""
@@ -262,7 +260,7 @@ def sign_path(path: str) -> str:
         
     filename = path.split("/")[-1]
     # URL valid for 60 minutes
-    expires = int((datetime.utcnow() + timedelta(minutes=60)).timestamp())
+    expires = int((datetime.now(UTC) + timedelta(minutes=60)).timestamp())
     signature = create_access_signature(filename, expires)
     
     return f"{path}?expires={expires}&signature={signature}"
@@ -275,7 +273,7 @@ def get_audio_file(filename: str, expires: int = 0, signature: str = ""):
          raise HTTPException(status_code=403, detail="Missing signature or expiry")
 
     # Verify expiry
-    if datetime.utcnow().timestamp() > expires:
+    if datetime.now(UTC).timestamp() > expires:
         raise HTTPException(status_code=403, detail="Link expired")
     
     # Verify signature
@@ -381,7 +379,8 @@ from huggingface_hub import snapshot_download
 from tqdm.auto import tqdm
 
 # Global progress tracker
-# { "repo_id": { "status": "pending"|"downloading"|"completed"|"error", "progress": 0, "filename": "...", "detail": "..." } }
+# { "repo_id": { "status": ..., "progress": ..., ... } }
+_download_lock = threading.Lock()
 download_progress = {}
 
 def get_tqdm_class(repo_id: str):
@@ -390,19 +389,21 @@ def get_tqdm_class(repo_id: str):
             super().update(n)
             if self.total and self.total > 0:
                 progress = (self.n / self.total) * 100
-                download_progress[repo_id] = {
-                    "status": "downloading",
-                    "progress": progress,
-                    "filename": self.desc or "Downloading...",
-                    "downloaded": self.n,
-                    "total": self.total
-                }
+                with _download_lock:
+                    download_progress[repo_id] = {
+                        "status": "downloading",
+                        "progress": progress,
+                        "filename": self.desc or "Downloading...",
+                        "downloaded": self.n,
+                        "total": self.total
+                    }
     return CustomTqdm
 
 def download_model_task(repo_id: str, token: str | None):
     try:
         print(f"Starting download for {repo_id}...")
-        download_progress[repo_id] = {"status": "starting", "progress": 0, "filename": "Initializing..."}
+        with _download_lock:
+            download_progress[repo_id] = {"status": "starting", "progress": 0, "filename": "Initializing..."}
         
         # Download to a specific folder in MODELS_DIR
         local_dir = os.path.join(MODELS_DIR, repo_id.replace("/", "_"))
@@ -414,10 +415,12 @@ def download_model_task(repo_id: str, token: str | None):
             tqdm_class=get_tqdm_class(repo_id)
         )
         print(f"Successfully downloaded {repo_id} to {local_dir}")
-        download_progress[repo_id] = {"status": "completed", "progress": 100, "filename": "Done"}
+        with _download_lock:
+            download_progress[repo_id] = {"status": "completed", "progress": 100, "filename": "Done"}
     except Exception as e:
         print(f"Failed to download {repo_id}: {e}")
-        download_progress[repo_id] = {"status": "error", "progress": 0, "filename": "Error", "detail": str(e)}
+        with _download_lock:
+            download_progress[repo_id] = {"status": "error", "progress": 0, "filename": "Error", "detail": str(e)}
 
 ALLOWED_MODELS = {
     "microsoft/VibeVoice-1.5B",
@@ -445,8 +448,11 @@ def download_model(request: Request, download_req: schemas.DownloadModelRequest,
         )
 
     # Check for duplicate active downloads
-    if repo_id in download_progress and download_progress[repo_id]["status"] in ["pending", "downloading", "starting"]:
-         raise HTTPException(status_code=400, detail=f"Download for {repo_id} is already in progress.")
+    with _download_lock:
+        if repo_id in download_progress:
+            status = download_progress[repo_id].get("status")
+            if status in ["pending", "downloading", "starting"]:
+                raise HTTPException(status_code=400, detail=f"Download for {repo_id} is already in progress.")
 
     # Fetch HF token from user settings (encrypted at rest)
     user_settings = db.query(models.UserSetting).filter(models.UserSetting.user_id == current_user.id).first()
@@ -458,7 +464,8 @@ def download_model(request: Request, download_req: schemas.DownloadModelRequest,
 @app.get("/api/v1/models/status")
 def get_model_download_status(repo_id: str, current_user: models.User = Depends(get_current_user)):
     # repo_id might come in as "user/repo"
-    status = download_progress.get(repo_id)
+    with _download_lock:
+        status = download_progress.get(repo_id)
     if not status:
         return {"status": "not_found", "progress": 0}
     return status
@@ -486,6 +493,7 @@ def get_available_models(current_user: models.User = Depends(get_current_user)):
     return {"models": models_list}
 
 @app.delete("/api/v1/models/{model_name}")
+@limiter.limit("10/minute")
 def delete_model(model_name: str = Path(..., pattern=r"^[a-zA-Z0-9\-_.]+$"), current_user: models.User = Depends(get_current_user)):
     """
     Delete a model from the local_models directory.
@@ -742,6 +750,7 @@ def load_model_pipeline(model_name: str):
         return LOADED_MODELS[model_name]
 
 @app.patch("/api/v1/settings", response_model=schemas.UserSettings)
+@limiter.limit("20/minute")
 def update_settings(settings_update: schemas.UserSettingsUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     db_settings = db.query(models.UserSetting).filter(models.UserSetting.user_id == current_user.id).first()
     if not db_settings:
@@ -842,6 +851,7 @@ async def get_task_status(task_id: str, current_user: models.User = Depends(get_
     return response
 
 @app.post("/api/v1/generate/celery/{task_id}/cancel")
+@limiter.limit("20/minute")
 async def cancel_task(task_id: str, current_user: models.User = Depends(get_current_user)):
     """
     Cancel a running Celery task.
@@ -873,6 +883,7 @@ async def cancel_task(task_id: str, current_user: models.User = Depends(get_curr
         }
 
 @app.get("/api/v1/history", response_model=list[schemas.AudioHistoryResponse])
+@limiter.limit("30/minute")
 def get_history(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     # Filter by current user
     history = db.query(models.AudioHistory).filter(models.AudioHistory.user_id == current_user.id).order_by(models.AudioHistory.timestamp.desc()).offset(skip).limit(limit).all()
@@ -889,7 +900,7 @@ def get_history(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), 
     return results
 
 @app.get("/api/v1/audio/convert/{audio_id}")
-@app.get("/api/v1/audio/convert/{audio_id}")
+@limiter.limit("10/minute")
 async def convert_audio(
     audio_id: int,
     format: str = "mp3",

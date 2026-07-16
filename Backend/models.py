@@ -15,7 +15,7 @@ class AudioHistory(Base):
     cfg_scale = Column(Float, default=1.5)
     inference_steps = Column(Integer, default=20)
     duration = Column(Float, default=0.0)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
 
     owner = relationship("User", back_populates="history")
 

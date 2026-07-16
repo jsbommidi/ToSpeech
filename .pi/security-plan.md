@@ -110,3 +110,56 @@ sec-12 (env gitignore) ───────────────────
 
 Item 10 (CSRF) touches the same auth endpoints as item 2 — build after item 2 is done.
 All others are independent. Build in ID order for safety.
+
+---
+
+## Phase 2: Reviewer-Discovered Issues (2025-07-16)
+
+### Item 13: Valkey broker authentication (NEW-HIGH)
+- **id:** `sec-13-valkey-auth`
+- **intent:** Add password authentication to Valkey broker. Update `celery_app.py` to include `?password=...` in broker/backend URLs. Update `start_valkey.sh` to pass `--requirepass`. Add `VALKEY_PASSWORD` env var.
+- **files:** `Backend/celery_app.py`, `Backend/start_valkey.sh`
+- **acceptance:** Unauthenticated connections to Valkey rejected. Celery worker connects with password.
+- **type:** non-behavioral
+
+### Item 14: Vite dev server bind to localhost only (NEW-HIGH)
+- **id:** `sec-14-vite-localhost`
+- **intent:** Change `host: true` to `host: 'localhost'` in vite.config.ts. LAN exposure of the full app + proxy is an unnecessary risk.
+- **files:** `Frontend/vite.config.ts`
+- **acceptance:** Vite binds only to 127.0.0.1. No LAN access possible.
+- **type:** non-behavioral
+
+### Item 15: Rate limit all state-changing endpoints (NEW-MEDIUM)
+- **id:** `sec-15-rate-limit-more`
+- **intent:** Add `@limiter.limit` to `PATCH /api/v1/settings`, `GET /api/v1/audio/convert/{id}`, `DELETE /api/v1/models/{name}`, `POST /api/v1/generate/celery/{id}/cancel`, and `GET /api/v1/history`.
+- **files:** `Backend/main.py`
+- **acceptance:** All mutating endpoints have rate limits. Convert limited to 10/min, settings to 20/min, delete to 10/min, cancel to 20/min, history to 30/min.
+- **type:** non-behavioral
+
+### Item 16: Thread-safe download_progress dict (NEW-MEDIUM)
+- **id:** `sec-16-thread-safe-download`
+- **intent:** Add `threading.Lock` around `download_progress` dict access. Wrap reads and writes in `with _download_lock:`.
+- **files:** `Backend/main.py`
+- **acceptance:** No race condition possible on concurrent download progress updates.
+- **type:** non-behavioral
+
+### Item 17: Fernet key fail-fast (NEW-MEDIUM)
+- **id:** `sec-17-fernet-failfast`
+- **intent:** Move FERNET_KEY check to startup. If unset, raise RuntimeError immediately (like JWT_SECRET_KEY does). Don't wait until a user tries to store a token to discover it's missing.
+- **files:** `Backend/main.py`
+- **acceptance:** App refuses to start without FERNET_KEY. No late runtime crash.
+- **type:** non-behavioral
+
+### Item 18: Clean dead code and duplicates (NEW-LOW)
+- **id:** `sec-18-dead-code`
+- **intent:** Remove unused imports (`wave`, `random`, `StaticFiles`, `pipeline` from main.py; duplicate `@app.get` decorator on convert endpoint). Remove dead `_FFMPEG_PATH` variable. Remove commented `app.mount("/static"...)` line.
+- **files:** `Backend/main.py`
+- **acceptance:** No unused imports. No dead code. No duplicate decorators.
+- **type:** non-behavioral
+
+### Item 19: Replace deprecated datetime.utcnow() (NEW-LOW)
+- **id:** `sec-19-utcnow`
+- **intent:** Replace `datetime.utcnow()` with `datetime.now(datetime.UTC)` in main.py and models.py (Python 3.12+).
+- **files:** `Backend/main.py`, `Backend/models.py`
+- **acceptance:** No `utcnow()` calls. All datetime references use timezone-aware UTC.
+- **type:** non-behavioral

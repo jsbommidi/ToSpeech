@@ -7,7 +7,7 @@ import uuid
 import os
 import copy
 import traceback
-from datetime import datetime
+from datetime import datetime, UTC
 
 AUDIO_DIR = "generated_audio"
 
@@ -249,7 +249,7 @@ def generate_audio_task(
                 cfg_scale=cfg_scale,
                 inference_steps=inference_steps,
                 duration=duration_sec,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 user_id=user_id
             )
             db.add(db_item)
