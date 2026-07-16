@@ -46,6 +46,12 @@ def generate_audio_task(
         return False
 
     try:
+        # Sanitize: cap text at 50K chars
+        MAX_TEXT_LENGTH = 50000
+        if len(text) > MAX_TEXT_LENGTH:
+            text = text[:MAX_TEXT_LENGTH]
+            print(f"WARNING: Text truncated to {MAX_TEXT_LENGTH} chars", flush=True)
+
         # Update task state to PROGRESS
         self.update_state(state='PROGRESS', meta={'status': 'Loading model...'})
         

@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
+from passlib.context import CryptContext
 from datetime import datetime, timedelta
 import models
 import schemas
@@ -13,6 +14,7 @@ import os
 import uuid
 import hmac
 import hashlib
+import secrets
 import wave
 import random
 import torch
@@ -26,6 +28,14 @@ from transformers import pipeline, AutoConfig, AutoModelForCausalLM
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+
+
+def _proxy_aware_key_func(request):
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return get_remote_address(request)
+
 # Import and register VibeVoice models
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -64,29 +74,89 @@ except ImportError as e:
     VIBEVOICE_AVAILABLE = False
 
 # Secret key for JWT
-SECRET_KEY = "SECRET_KEY_GOES_HERE_CHANGE_IN_PROD"
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    SECRET_KEY = "dev-secret-change-me--DO-NOT-USE-IN-PROD"
+    print("!!! WARNING: JWT_SECRET_KEY not set. Using insecure dev default. !!!", flush=True)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440 # 24 hours
 
+# HF Token encryption
+from cryptography.fernet import Fernet
+FERNET_KEY = os.environ.get("FERNET_KEY")
+_fernet = Fernet(FERNET_KEY.encode()) if FERNET_KEY else None
+
+def encrypt_hf_token(plain: str | None) -> str | None:
+    if not plain:
+        return None
+    if not _fernet:
+        raise RuntimeError("FERNET_KEY env var required to store HF token")
+    return _fernet.encrypt(plain.encode()).decode()
+
+def decrypt_hf_token(encrypted: str | None) -> str | None:
+    if not encrypted:
+        return None
+    if not _fernet:
+        raise RuntimeError("FERNET_KEY env var required to decrypt HF token")
+    return _fernet.decrypt(encrypted.encode()).decode()
+
+def mask_hf_token(token: str | None) -> str | None:
+    if not token:
+        return None
+    if len(token) <= 8:
+        return "hf_********"
+    return token[:6] + "********" + token[-4:]
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Create database tables
 # In production, use Alembic for migrations. For dev, we might need to drop tables if models change drastically, 
 # or just delete the sqlite file.
 models.Base.metadata.create_all(bind=database.engine)
 
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=_proxy_aware_key_func)
 app = FastAPI(title="ToSpeech API", version="1.0.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# CSRF middleware (double-submit cookie pattern)
+@app.middleware("http")
+async def csrf_middleware(request: Request, call_next):
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return await call_next(request)
+    # Exclude auth endpoints (no session yet)
+    if request.url.path in ("/auth/login", "/register", "/auth/logout"):
+        return await call_next(request)
+    cookie_token = request.cookies.get("csrf_token")
+    header_token = request.headers.get("X-CSRF-Token")
+    if not cookie_token or not header_token:
+        return JSONResponse(status_code=403, content={"detail": "CSRF token missing"})
+    if not hmac.compare_digest(cookie_token, header_token):
+        return JSONResponse(status_code=403, content={"detail": "CSRF token mismatch"})
+    return await call_next(request)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    print(f"Unhandled error: {exc}", flush=True)
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
 # CORS
-origins = [
-    "http://localhost:1310",
-    "http://127.0.0.1:1310",
-    "http://localhost:5173",
-    "http://192.168.0.175:1310",
-]
+_allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "")
+if _allowed_origins_env:
+    origins = [o.strip() for o in _allowed_origins_env.split(",")]
+else:
+    origins = [
+        "http://localhost:1310",
+        "http://127.0.0.1:1310",
+        "http://localhost:5173",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
@@ -113,6 +183,20 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+# CSRF protection (double-submit cookie pattern)
+def _new_csrf_token() -> str:
+    return secrets.token_hex(32)
+
+async def verify_csrf(request: Request):
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    cookie_token = request.cookies.get("csrf_token")
+    header_token = request.headers.get("X-CSRF-Token")
+    if not cookie_token or not header_token:
+        raise HTTPException(status_code=403, detail="CSRF token missing")
+    if not hmac.compare_digest(cookie_token, header_token):
+        raise HTTPException(status_code=403, detail="CSRF token mismatch")
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -148,6 +232,15 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 # Directory for audio
 AUDIO_DIR = "generated_audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
+
+# Resolve ffmpeg path once at startup
+import subprocess
+_FFMPEG_PATH = "/usr/bin/env"  # will look up ffmpeg from PATH each call
+# Validate ffmpeg is available
+try:
+    subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True, timeout=5)
+except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+    print("WARNING: ffmpeg not found. Audio conversion will be unavailable.", flush=True)
 
 # Mount static files to serve audio
 # app.mount("/static", StaticFiles(directory=AUDIO_DIR), name="static")
@@ -203,8 +296,8 @@ def register(request: Request, user: schemas.UserCreate, db: Session = Depends(g
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Email-only auth: No password hashing
-    db_user = models.User(email=user.email)
+    hashed = pwd_context.hash(user.password)
+    db_user = models.User(email=user.email, password_hash=hashed)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -221,12 +314,11 @@ def register(request: Request, user: schemas.UserCreate, db: Session = Depends(g
 @app.post("/auth/login")
 @limiter.limit("10/minute")
 def login(request: Request, login_req: schemas.LoginRequest, db: Session = Depends(get_db)):
-    # Passwordless login: Trust the email exists
     user = db.query(models.User).filter(models.User.email == login_req.email).first()
-    if not user:
+    if not user or not pwd_context.verify(login_req.password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -239,10 +331,17 @@ def login(request: Request, login_req: schemas.LoginRequest, db: Session = Depen
         key="access_token",
         value=access_token,
         httponly=True,
-        # Secure must be False for local HTTP (unless strictly localhost)
-        # We'll default to False for this dev environment fix
         secure=False, 
-        samesite="lax",
+        samesite="strict",
+        max_age=int(access_token_expires.total_seconds())
+    )
+    csrf = _new_csrf_token()
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf,
+        httponly=False,
+        secure=False,
+        samesite="strict",
         max_age=int(access_token_expires.total_seconds())
     )
     return response
@@ -261,11 +360,9 @@ async def read_users_me(current_user: models.User = Depends(get_current_user)):
 def get_settings(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     settings = db.query(models.UserSetting).filter(models.UserSetting.user_id == current_user.id).first()
     if not settings:
-        # Create if missing (migration/backward compat)
-        settings = models.UserSetting(user_id=current_user.id)
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
+        # Mask HF token in response
+    if settings.hf_token:
+        settings.hf_token = mask_hf_token(decrypt_hf_token(settings.hf_token))
     return settings
 
 # Directory for local models
@@ -322,7 +419,7 @@ ALLOWED_MODELS = {
 
 @app.post("/api/v1/models/download")
 @limiter.limit("5/minute")
-def download_model(request: Request, download_req: schemas.DownloadModelRequest, background_tasks: BackgroundTasks, current_user: models.User = Depends(get_current_user)):
+def download_model(request: Request, download_req: schemas.DownloadModelRequest, background_tasks: BackgroundTasks, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     # extract repo_id from URL if needed
     repo_id = download_req.url.strip()
     if "huggingface.co/" in repo_id:
@@ -343,7 +440,11 @@ def download_model(request: Request, download_req: schemas.DownloadModelRequest,
     if repo_id in download_progress and download_progress[repo_id]["status"] in ["pending", "downloading", "starting"]:
          raise HTTPException(status_code=400, detail=f"Download for {repo_id} is already in progress.")
 
-    background_tasks.add_task(download_model_task, repo_id, download_req.hf_token)
+    # Fetch HF token from user settings (encrypted at rest)
+    user_settings = db.query(models.UserSetting).filter(models.UserSetting.user_id == current_user.id).first()
+    hf_token = decrypt_hf_token(user_settings.hf_token) if user_settings else None
+
+    background_tasks.add_task(download_model_task, repo_id, hf_token)
     return {"message": f"Download started for {repo_id}. Check logs or refresh models list later."}
 
 @app.get("/api/v1/models/status")
@@ -377,7 +478,7 @@ def get_available_models(current_user: models.User = Depends(get_current_user)):
     return {"models": models_list}
 
 @app.delete("/api/v1/models/{model_name}")
-def delete_model(model_name: str = Path(..., pattern=r"^[a-zA-Z0-9/\-_.]+$"), current_user: models.User = Depends(get_current_user)):
+def delete_model(model_name: str = Path(..., pattern=r"^[a-zA-Z0-9\-_.]+$"), current_user: models.User = Depends(get_current_user)):
     """
     Delete a model from the local_models directory.
     """
@@ -641,6 +742,8 @@ def update_settings(settings_update: schemas.UserSettingsUpdate, current_user: m
     
     update_data = settings_update.dict(exclude_unset=True)
     for key, value in update_data.items():
+        if key == "hf_token" and value:
+            value = encrypt_hf_token(value)
         setattr(db_settings, key, value)
     
     db.add(db_settings)
@@ -832,8 +935,8 @@ async def convert_audio(
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_file:
             output_path = tmp_file.name
         
-        # Use ffmpeg from conda environment or system PATH
-        ffmpeg_cmd = os.environ.get('FFMPEG_PATH', 'ffmpeg')
+        # Use system ffmpeg (validated at startup)
+        ffmpeg_cmd = "ffmpeg"
         
         # Run ffmpeg conversion
         cmd = [

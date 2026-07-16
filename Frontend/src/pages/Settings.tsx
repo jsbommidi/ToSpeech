@@ -134,7 +134,7 @@ export default function Settings() {
         setDownloadStatusText('Initializing...');
 
         try {
-            await settingsAPI.downloadModel(downloadUrl, settings.hf_token);
+            await settingsAPI.downloadModel(downloadUrl);
             setMessage('Download started! Please wait...');
 
             // Start polling

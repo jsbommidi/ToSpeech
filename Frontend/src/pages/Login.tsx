@@ -13,12 +13,13 @@ import {
     InputAdornment,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Mic } from 'lucide-react';
+import { Mail, Mic, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
     const [isRegister, setIsRegister] = useState(false);
     const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorTimestamp, setErrorTimestamp] = useState<number>(0);
@@ -38,8 +39,8 @@ export default function Login() {
         e.preventDefault();
         e.stopPropagation();
 
-        if (!email) {
-            setError('Please enter your email');
+        if (!email || !password) {
+            setError('Please enter your email and password');
             return;
         }
 
@@ -50,7 +51,7 @@ export default function Login() {
 
         if (isRegister) {
             // Registration
-            const result = await register(email);
+            const result = await register(email, password);
             if (result.success) {
                 hasLoginError.current = false;
                 navigate('/', { replace: true });
@@ -62,7 +63,7 @@ export default function Login() {
             }
         } else {
             // Login
-            const result = await login(email);
+            const result = await login(email, password);
             if (result.success) {
                 hasLoginError.current = false;
                 navigate('/', { replace: true });
@@ -78,6 +79,7 @@ export default function Login() {
     const toggleMode = () => {
         setIsRegister(!isRegister);
         setEmail('');
+        setPassword('');
         setError('');
         hasLoginError.current = false;
     };
@@ -213,6 +215,31 @@ export default function Login() {
                                             </InputAdornment>
                                         ),
                                     }}
+                                    sx={{ mb: 2 }}
+                                />
+
+                                <TextField
+                                    fullWidth
+                                    type="password"
+                                    label="Password"
+                                    value={password}
+                                    onChange={(e) => {
+                                        setPassword(e.target.value);
+                                        if (error && Date.now() - errorTimestamp > 2000) {
+                                            setError('');
+                                            setErrorTimestamp(0);
+                                            hasLoginError.current = false;
+                                        }
+                                    }}
+                                    required
+                                    autoComplete={isRegister ? 'new-password' : 'current-password'}
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <Lock size={20} style={{ color: theme.palette.text.secondary }} />
+                                            </InputAdornment>
+                                        ),
+                                    }}
                                     sx={{ mb: 3 }}
                                 />
 
@@ -221,7 +248,7 @@ export default function Login() {
                                     fullWidth
                                     size="large"
                                     variant="contained"
-                                    disabled={isSubmitting}
+                                    disabled={isSubmitting || !password}
                                     sx={{
                                         py: 1.5,
                                         fontSize: '1rem',

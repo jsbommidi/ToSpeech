@@ -9,7 +9,10 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  // No longer manually sending token, browser handles cookies
+  const csrfToken = Cookies.get('csrf_token');
+  if (csrfToken) {
+    config.headers['X-CSRF-Token'] = csrfToken;
+  }
   return config;
 });
 
@@ -37,14 +40,14 @@ export interface User {
 }
 
 export const authAPI = {
-  login: async (email: string) => {
-    return api.post('/auth/login', { email });
+  login: async (email: string, password: string) => {
+    return api.post('/auth/login', { email, password });
   },
   logout: async () => {
     return api.post('/auth/logout');
   },
-  register: async (email: string) => {
-    return api.post('/register', { email });
+  register: async (email: string, password: string) => {
+    return api.post('/register', { email, password });
   },
   getMe: async () => {
     return api.get<User>('/api/v1/users/me');
@@ -102,8 +105,8 @@ export const settingsAPI = {
   getAvailableModels: async () => {
     return api.get<{ models: string[] }>('/api/v1/models/available');
   },
-  downloadModel: async (url: string, hf_token: string | null) => {
-    return api.post('/api/v1/models/download', { url, hf_token });
+  downloadModel: async (url: string) => {
+    return api.post('/api/v1/models/download', { url });
   },
   getDownloadStatus: async (repoId: string) => {
     return api.get<{ status: string; progress: number; filename?: string; detail?: string }>('/api/v1/models/status', {

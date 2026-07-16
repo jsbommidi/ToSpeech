@@ -1,5 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
+import re
 
 class GenerateRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=100000, description="The input text to synthesize")
@@ -7,6 +8,15 @@ class GenerateRequest(BaseModel):
     speaker: str | None = Field(None, pattern=r"^[a-zA-Z0-9_\-.]+$", description="Optional speaker/voice ID")
     cfg_scale: float = Field(1.5, ge=0.1, le=20.0, description="Guidance scale for generation")
     inference_steps: int = Field(5, ge=1, le=50, description="Number of inference steps")
+
+    @field_validator('text')
+    @classmethod
+    def sanitize_text(cls, v: str) -> str:
+        # Strip null bytes
+        v = v.replace('\x00', '')
+        # Strip control characters except newline and tab
+        v = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', v)
+        return v
 
 class DownloadModelRequest(BaseModel):
     url: str
@@ -30,9 +40,11 @@ class AudioHistoryResponse(AudioHistoryBase):
 
 class UserCreate(BaseModel):
     email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
 
 class LoginRequest(BaseModel):
     email: EmailStr
+    password: str = Field(..., min_length=1)
 
 class UserSettingsBase(BaseModel):
     sample_rate: int = 24000  # 24kHz is optimal for VibeVoice TTS model

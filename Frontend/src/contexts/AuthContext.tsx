@@ -3,8 +3,8 @@ import { authAPI, type User } from '../lib/api';
 
 interface AuthContextType {
     user: User | null;
-    login: (email: string) => Promise<{ success: boolean; error?: string }>;
-    register: (email: string) => Promise<{ success: boolean; error?: string }>;
+    login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+    register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
     logout: () => void;
     updateUser: (updatedUser: User) => void;
     isAuthenticated: boolean;
@@ -50,11 +50,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         initAuth();
     }, []);
 
-    const register = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    const register = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
         try {
-            await authAPI.register(email);
+            await authAPI.register(email, password);
             // Auto login after register
-            return login(email);
+            return login(email, password);
         } catch (error: any) {
             console.error('Registration failed:', error);
             let errorMessage = 'Registration failed. Please try again.';
@@ -73,9 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const login = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
         try {
-            const response = await authAPI.login(email);
+            const response = await authAPI.login(email, password);
             // Cookie is set automatically by backend response
             // const { access_token } = response.data; 
             // setToken(access_token);
