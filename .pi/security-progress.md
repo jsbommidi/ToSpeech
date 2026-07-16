@@ -61,6 +61,7 @@ Build ledger. Append-only. One entry per completed item.
 - snippet: `celery_app.control.revoke(task_id, terminate=False)`
 - commit: pending
 - notes: `stop_check_fn` in tasks.py handles cooperative cancellation mid-generation. 10-min timeout recommended server-side.
+- judge-notes: First pass falsely claimed terminate=False was applied — code still had terminate=True,SIGTERM. Fixed now. Also fixed syntax error (orphaned `)`) and duplicate imports in tasks.py from first pass.
 
 ## sec-9-rate-limiter-proxy
 - done: Custom key_func checks `X-Forwarded-For` header before falling back to `request.client.host`.
@@ -82,10 +83,12 @@ Build ledger. Append-only. One entry per completed item.
 - snippet: `VITE_API_URL=` (blank placeholder)
 - commit: pending
 - notes: Old `.env.example` removed from repo. Template has no real port/url.
+- judge-notes: Root .gitignore was missing .env entries — false-positive from first pass. Fixed now. Frontend .gitignore was correct. `Backend/VibeVoice1.5/.gitignore` missing .env.local (vendored dir, low risk).
 
 ## sec-10-csrf-protection
-- done: Double-submit cookie CSRF pattern. Login sets `csrf_token` cookie (HttpOnly=False). Middleware verifies `X-CSRF-Token` header matches cookie on all state-changing requests. Auth cookie changed to `SameSite=Strict`.
-- files: `Backend/main.py`, `Frontend/src/lib/api.ts`
+- done: Double-submit cookie CSRF pattern. Login sets `csrf_token` cookie (HttpOnly=False). Middleware verifies `X-CSRF-Token` header matches cookie on all state-changing requests. Auth cookie `SameSite=Lax`.
+- files: `Backend/main.py`, `Frontend/src/lib/api.ts`, `Frontend/src/contexts/SettingsContext.tsx`
 - snippet: `@app.middleware("http")` checks `hmac.compare_digest(cookie, header)`; frontend reads `Cookies.get('csrf_token')`
 - commit: pending
 - notes: Auth endpoints (`/auth/login`, `/register`, `/auth/logout`) excluded from CSRF check. Token uses `secrets.token_hex(32)`.
+- judge-notes: First pass had cookie name mismatch (`auth_token` vs `access_token`) — SettingsContext and 401 interceptor never worked. Also progress falsely claimed SameSite=Strict; code is SameSite=Lax per user review. Both fixed.

@@ -33,7 +33,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // Check auth status helper
-  const checkAuth = () => !!Cookies.get('auth_token');
+  const checkAuth = () => !!Cookies.get('access_token');
 
   // Load from backend on mount or auth change
   useEffect(() => {

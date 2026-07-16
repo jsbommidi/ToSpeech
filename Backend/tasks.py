@@ -11,7 +11,7 @@ from datetime import datetime
 
 AUDIO_DIR = "generated_audio"
 
-@celery_app.task(bind=True, name='tasks.generate_audio_task')
+@celery_app.task(bind=True, name='tasks.generate_audio_task', soft_time_limit=600, time_limit=900)
 def generate_audio_task(
     self,
     text: str,
@@ -26,8 +26,6 @@ def generate_audio_task(
     Celery task for audio generation.
     Returns: dict with 'status', 'file_path', 'duration', etc.
     """
-    from transformers import StoppingCriteria, StoppingCriteriaList
-    from transformers import StoppingCriteria, StoppingCriteriaList
     from transformers.modeling_outputs import BaseModelOutputWithPast
     from transformers.cache_utils import DynamicCache
     
@@ -180,6 +178,9 @@ def generate_audio_task(
                 model.set_ddpm_inference_steps(num_steps=inference_steps or 5)
                 
                 with torch.no_grad():
+                    # Check cancellation before generation
+                    if stop_check_fn():
+                        return {'status': 'cancelled', 'message': 'Task was cancelled'}
                     # 1.5B uses is_prefill logic
                     outputs = model.generate(
                         **inputs,
@@ -189,13 +190,6 @@ def generate_audio_task(
                         generation_config={'do_sample': False},
                         verbose=True,
                         is_prefill=True if voice_samples else False,
-                        # Note: standard model might not support stop_check_fn unless updated.
-                        # We will assume it does or ignore it if not strictly required by method signature,
-                        # but if it fails we might need to patch the model code or accept it won't cancel deeply.
-                        # VibeVoiceForConditionalGenerationInference likely inherits from a class we can control?
-                        # Since we control the repo, if it fails I'd need to edit VibeVoice1.5 code.
-                        # For now let's try passing it? If 1.5B code doesn't support it, it might invalid kwarg.
-                        # I'll check VibeVoice1.5/vibevoice/modular/modeling_vibevoice_inference.py if I can.
                     )
             
             # Check for generation cut short due to cancellation (if stop_check_fn was used/supported)

@@ -31,10 +31,15 @@ from slowapi.errors import RateLimitExceeded
 
 
 def _proxy_aware_key_func(request):
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return get_remote_address(request)
+    # Only trust X-Forwarded-For from known proxy IPs
+    trusted_proxies = os.environ.get("PROXY_TRUSTED_IPS", "127.0.0.1,::1").split(",")
+    trusted_proxies = [ip.strip() for ip in trusted_proxies]
+    client_ip = get_remote_address(request)
+    if client_ip in trusted_proxies:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return client_ip
 
 # Import and register VibeVoice models
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -76,8 +81,7 @@ except ImportError as e:
 # Secret key for JWT
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
 if not SECRET_KEY:
-    SECRET_KEY = "dev-secret-change-me--DO-NOT-USE-IN-PROD"
-    print("!!! WARNING: JWT_SECRET_KEY not set. Using insecure dev default. !!!", flush=True)
+    raise RuntimeError("JWT_SECRET_KEY environment variable is required")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440 # 24 hours
 
@@ -332,7 +336,7 @@ def login(request: Request, login_req: schemas.LoginRequest, db: Session = Depen
         value=access_token,
         httponly=True,
         secure=False, 
-        samesite="strict",
+        samesite="lax",
         max_age=int(access_token_expires.total_seconds())
     )
     csrf = _new_csrf_token()
@@ -341,7 +345,7 @@ def login(request: Request, login_req: schemas.LoginRequest, db: Session = Depen
         value=csrf,
         httponly=False,
         secure=False,
-        samesite="strict",
+        samesite="lax",
         max_age=int(access_token_expires.total_seconds())
     )
     return response
@@ -360,7 +364,11 @@ async def read_users_me(current_user: models.User = Depends(get_current_user)):
 def get_settings(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     settings = db.query(models.UserSetting).filter(models.UserSetting.user_id == current_user.id).first()
     if not settings:
-        # Mask HF token in response
+        settings = models.UserSetting(user_id=current_user.id)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    # Mask HF token in response
     if settings.hf_token:
         settings.hf_token = mask_hf_token(decrypt_hf_token(settings.hf_token))
     return settings
@@ -850,8 +858,8 @@ async def cancel_task(task_id: str, current_user: models.User = Depends(get_curr
         except Exception as e:
              print(f"Error setting cancellation flag: {e}")
 
-        # Revoke the task (terminate=True will kill the worker process if needed)
-        celery_app.control.revoke(task_id, terminate=True, signal='SIGTERM')
+        # Revoke the task cooperatively (no force-kill)
+        celery_app.control.revoke(task_id, terminate=False)
         return {
             "task_id": task_id,
             "status": "cancelled",

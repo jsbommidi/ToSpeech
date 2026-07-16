@@ -22,7 +22,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       // Clear auth and redirect
-      Cookies.remove('auth_token');
+      Cookies.remove('access_token');
       localStorage.removeItem('tospeech-user');
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
