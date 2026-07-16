@@ -94,15 +94,11 @@ _fernet = Fernet(FERNET_KEY.encode())
 def encrypt_hf_token(plain: str | None) -> str | None:
     if not plain:
         return None
-    if not _fernet:
-        raise RuntimeError("FERNET_KEY env var required to store HF token")
     return _fernet.encrypt(plain.encode()).decode()
 
 def decrypt_hf_token(encrypted: str | None) -> str | None:
     if not encrypted:
         return None
-    if not _fernet:
-        raise RuntimeError("FERNET_KEY env var required to decrypt HF token")
     return _fernet.decrypt(encrypted.encode()).decode()
 
 def mask_hf_token(token: str | None) -> str | None:
@@ -192,16 +188,6 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 # CSRF protection (double-submit cookie pattern)
 def _new_csrf_token() -> str:
     return secrets.token_hex(32)
-
-async def verify_csrf(request: Request):
-    if request.method in ("GET", "HEAD", "OPTIONS"):
-        return
-    cookie_token = request.cookies.get("csrf_token")
-    header_token = request.headers.get("X-CSRF-Token")
-    if not cookie_token or not header_token:
-        raise HTTPException(status_code=403, detail="CSRF token missing")
-    if not hmac.compare_digest(cookie_token, header_token):
-        raise HTTPException(status_code=403, detail="CSRF token mismatch")
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
